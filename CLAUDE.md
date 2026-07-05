@@ -94,13 +94,63 @@ Deliberately out of scope for MVP — don't build these yet:
   shared accounts, admin dashboards) — build ownership correctly first,
   add richer permission models only once there's a real need
 
+## Tech stack
+
+- **Frontend** — Next.js (App Router, TypeScript), Tailwind, deployed on
+  Vercel. Owns the ledger UI, the Phase 3 diff/approval view, and the feed.
+  Never calls Claude directly — all generation goes through the backend.
+- **Backend** — Python (FastAPI), hosted on Render. Owns all LLM calls, the
+  grounding-check function, and document rendering.
+- **Database / Auth / Storage** — Supabase.
+  - Postgres with **Row-Level Security** on every user-scoped table
+    (`user_id = auth.uid()`, referencing `auth.users(id)` directly — no
+    separate `profiles` table unless/until we need app-specific user
+    fields). This is the primary mechanism satisfying principle 6 —
+    cross-user access is blocked at the database itself, not just by app
+    code remembering a `WHERE user_id = ...` clause.
+  - **Supabase Auth**, magic-link (passwordless) sign-in for Phase 0 — no
+    password storage or reset flow to build. Frontend authenticates via the
+    Supabase JS client (`@supabase/ssr` for Next.js App Router session
+    handling) and forwards the resulting JWT as a Bearer token to the
+    backend.
+  - **Data access pattern**: the backend talks to user-scoped tables via
+    the Supabase client (`postgrest-py`), forwarding the request's user JWT
+    on each call so Postgres's RLS evaluates `auth.uid()` and enforces the
+    boundary itself — the backend is never in a position to accidentally
+    query across users. The service-role key (which bypasses RLS) is
+    reserved for genuinely unscoped operations only (e.g. writing to the
+    shared `postings` table), never for per-user reads/writes.
+  - **Migrations**: plain SQL files in `supabase/migrations/`, applied via
+    the Supabase CLI (`supabase db push`) and testable locally against
+    `supabase start` before hitting the real project. Schema, RLS policies,
+    and auth all live together in Supabase, so no separate ORM/migration
+    tool (e.g. Alembic) is needed unless a future backend-only table
+    genuinely falls outside RLS.
+  - **Supabase Storage** for rendered PDF/docx files, one private path per
+    user.
+- **LLM** — Anthropic Claude API, called only from the backend. The
+  generation call takes cited ledger entries as explicit input and returns
+  text + citations (per the working conventions below). The grounding check
+  (principle 2) is a separate, deterministic/programmatic function — not an
+  LLM call — so it stays unit-testable against known-bad generations; an LLM
+  pass can be added as a supplement later but isn't the primary check.
+- **Rendering** — WeasyPrint (HTML/CSS → PDF) and python-docx (→ `.docx`),
+  both server-side in the backend, from the same templated content.
+- **Repo layout** — monorepo: `frontend/` (Next.js), `backend/` (FastAPI),
+  plus this CLAUDE.md at the root.
+- **Testing** — pytest in the backend (including the cross-user isolation
+  test called for below, run against a local `supabase start` instance with
+  RLS enabled); Vitest/Playwright on the frontend as needed.
+
 ## Data model (MVP)
 
 Single database. Rough shape — adjust field types to whatever the chosen
 stack expects, but keep the relationships and `user_id` scoping as-is.
 
-**users** — `id`, `email`, `auth fields per whatever the chosen stack uses`,
-`created_at`
+**users** — handled by Supabase's built-in `auth.users` (id, email,
+created_at, etc.) via magic-link auth; no separate `public.users` or
+`profiles` table for now. All other tables' `user_id` FKs reference
+`auth.users(id)` directly.
 
 **roles** — `id`, `user_id` (FK → users), `company`, `title`, `start_date`,
 `end_date`, `location`, `one_line_summary`
@@ -159,6 +209,10 @@ deploy cadence, a genuinely separate failure mode) — not preemptively.
 
 ## Working conventions
 
+- Build phase by phase, with the user participating in each phase rather
+  than having it built end-to-end unattended — don't jump ahead to later
+  phases or start implementation without the user engaging on that phase
+  first.
 - Prefer boring, explicit code over clever abstractions.
 - Any function that calls an LLM to generate resume/cover letter content
   must take the cited ledger entries as an explicit input and return
