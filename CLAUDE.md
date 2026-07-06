@@ -108,9 +108,12 @@ Deliberately out of scope for MVP — don't build these yet:
     fields). This is the primary mechanism satisfying principle 6 —
     cross-user access is blocked at the database itself, not just by app
     code remembering a `WHERE user_id = ...` clause.
-  - **Supabase Auth**, magic-link (passwordless) sign-in for Phase 0 — no
-    password storage or reset flow to build. Frontend authenticates via the
-    Supabase JS client (`@supabase/ssr` for Next.js App Router session
+  - **Supabase Auth**, email/password sign-in. (Phase 0 originally used
+    magic-link/passwordless sign-in, but switched to password auth after
+    running into magic-link delivery issues; no public sign-up page or
+    forgot-password flow yet since there's a single user for now — reset
+    via the Supabase dashboard in the meantime.) Frontend authenticates via
+    the Supabase JS client (`@supabase/ssr` for Next.js App Router session
     handling) and forwards the resulting JWT as a Bearer token to the
     backend.
   - **Data access pattern**: the backend talks to user-scoped tables via
@@ -148,7 +151,7 @@ Single database. Rough shape — adjust field types to whatever the chosen
 stack expects, but keep the relationships and `user_id` scoping as-is.
 
 **users** — handled by Supabase's built-in `auth.users` (id, email,
-created_at, etc.) via magic-link auth; no separate `public.users` or
+created_at, etc.) via email/password auth; no separate `public.users` or
 `profiles` table for now. All other tables' `user_id` FKs reference
 `auth.users(id)` directly.
 
