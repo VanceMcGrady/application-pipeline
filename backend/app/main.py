@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
-from .routers import health, me
+from .routers import achievements, education, health, me, roles, skills
 
 app = FastAPI(title="Application Pipeline API")
 
@@ -16,3 +16,7 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(me.router)
+app.include_router(roles.router)
+app.include_router(achievements.router)
+app.include_router(skills.router)
+app.include_router(education.router)
