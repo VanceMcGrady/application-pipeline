@@ -99,8 +99,11 @@ Deliberately out of scope for MVP — don't build these yet:
 - **Frontend** — Next.js (App Router, TypeScript), Tailwind, deployed on
   Vercel. Owns the ledger UI, the Phase 3 diff/approval view, and the feed.
   Never calls Claude directly — all generation goes through the backend.
-- **Backend** — Python (FastAPI), hosted on Render. Owns all LLM calls, the
-  grounding-check function, and document rendering.
+- **Backend** — Node.js (Express, TypeScript), hosted on Render. Owns all
+  LLM calls, the grounding-check function, and document rendering. (Started
+  as Python/FastAPI; rewritten to Node/Express for the same reason auth
+  switched to password-based — not a technical-merit call, just what's
+  useful to have working in this repo at the time.)
 - **Database / Auth / Storage** — Supabase.
   - Postgres with **Row-Level Security** on every user-scoped table
     (`user_id = auth.uid()`, referencing `auth.users(id)` directly — no
@@ -117,17 +120,17 @@ Deliberately out of scope for MVP — don't build these yet:
     handling) and forwards the resulting JWT as a Bearer token to the
     backend.
   - **Data access pattern**: the backend talks to user-scoped tables via
-    the Supabase client (`postgrest-py`), forwarding the request's user JWT
-    on each call so Postgres's RLS evaluates `auth.uid()` and enforces the
-    boundary itself — the backend is never in a position to accidentally
-    query across users. The service-role key (which bypasses RLS) is
-    reserved for genuinely unscoped operations only (e.g. writing to the
-    shared `postings` table), never for per-user reads/writes.
+    the Supabase client (`@supabase/supabase-js`), forwarding the request's
+    user JWT on each call so Postgres's RLS evaluates `auth.uid()` and
+    enforces the boundary itself — the backend is never in a position to
+    accidentally query across users. The service-role key (which bypasses
+    RLS) is reserved for genuinely unscoped operations only (e.g. writing to
+    the shared `postings` table), never for per-user reads/writes.
   - **Migrations**: plain SQL files in `supabase/migrations/`, applied via
     the Supabase CLI (`supabase db push`) and testable locally against
     `supabase start` before hitting the real project. Schema, RLS policies,
     and auth all live together in Supabase, so no separate ORM/migration
-    tool (e.g. Alembic) is needed unless a future backend-only table
+    tool (e.g. Prisma) is needed unless a future backend-only table
     genuinely falls outside RLS.
   - **Supabase Storage** for rendered PDF/docx files, one private path per
     user.
@@ -137,13 +140,15 @@ Deliberately out of scope for MVP — don't build these yet:
   (principle 2) is a separate, deterministic/programmatic function — not an
   LLM call — so it stays unit-testable against known-bad generations; an LLM
   pass can be added as a supplement later but isn't the primary check.
-- **Rendering** — WeasyPrint (HTML/CSS → PDF) and python-docx (→ `.docx`),
-  both server-side in the backend, from the same templated content.
-- **Repo layout** — monorepo: `frontend/` (Next.js), `backend/` (FastAPI),
-  plus this CLAUDE.md at the root.
-- **Testing** — pytest in the backend (including the cross-user isolation
-  test called for below, run against a local `supabase start` instance with
-  RLS enabled); Vitest/Playwright on the frontend as needed.
+- **Rendering** — an HTML/CSS → PDF renderer (e.g. Playwright/Puppeteer) and
+  the `docx` npm package (→ `.docx`), both server-side in the backend, from
+  the same templated content. (Not yet built — Phase 3 — so pick the
+  specific libraries when that phase starts; this just fixes the approach.)
+- **Repo layout** — monorepo: `frontend/` (Next.js), `backend/`
+  (Express/TypeScript), plus this CLAUDE.md at the root.
+- **Testing** — Vitest + supertest in the backend (including the cross-user
+  isolation test called for below, run against a local `supabase start`
+  instance with RLS enabled); Vitest/Playwright on the frontend as needed.
 
 ## Data model (MVP)
 
