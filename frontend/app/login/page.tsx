@@ -1,35 +1,32 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
-    "idle",
-  );
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("sending");
+    setStatus("submitting");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      password,
     });
 
-    setStatus(error ? "error" : "sent");
-  }
+    if (error) {
+      setStatus("error");
+      return;
+    }
 
-  if (status === "sent") {
-    return (
-      <main className="flex min-h-screen items-center justify-center p-8">
-        <p>Check your email for a sign-in link.</p>
-      </main>
-    );
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -49,16 +46,27 @@ export default function LoginPage() {
           onChange={(event) => setEmail(event.target.value)}
           className="rounded border px-3 py-2"
         />
+        <label htmlFor="password" className="text-sm font-medium">
+          Password
+        </label>
+        <input
+          id="password"
+          type="password"
+          required
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          className="rounded border px-3 py-2"
+        />
         <button
           type="submit"
-          disabled={status === "sending"}
+          disabled={status === "submitting"}
           className="rounded bg-black px-3 py-2 text-white disabled:opacity-50"
         >
-          {status === "sending" ? "Sending..." : "Send magic link"}
+          {status === "submitting" ? "Signing in..." : "Sign in"}
         </button>
         {status === "error" && (
           <p className="text-sm text-red-600">
-            Something went wrong. Try again.
+            Invalid email or password.
           </p>
         )}
       </form>
