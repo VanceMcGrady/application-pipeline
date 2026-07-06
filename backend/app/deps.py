@@ -1,3 +1,4 @@
+import jwt
 from fastapi import Depends, Header, HTTPException, status
 from supabase import Client, create_client
 
@@ -8,6 +9,18 @@ def get_bearer_token(authorization: str = Header(...)) -> str:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Missing bearer token")
     return authorization.removeprefix("Bearer ")
+
+
+def get_current_user_id(token: str = Depends(get_bearer_token)) -> str:
+    """Reads the `sub` claim for use in insert payloads.
+
+    This is not the security check — it's just so we have a user_id to
+    write. Postgres independently re-verifies the JWT's signature and
+    enforces `user_id = auth.uid()` via RLS, so a forged value here would
+    simply be rejected by the insert policy, not trusted.
+    """
+    payload = jwt.decode(token, options={"verify_signature": False})
+    return payload["sub"]
 
 
 def get_user_supabase_client(token: str = Depends(get_bearer_token)) -> Client:
