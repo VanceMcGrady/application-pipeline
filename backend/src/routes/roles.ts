@@ -18,6 +18,7 @@ rolesRouter.get("", async (req, res) => {
     res.status(400).json({ detail: error.message });
     return;
   }
+  console.log("data in roles.ts", data);
   res.json(data);
 });
 
@@ -25,7 +26,10 @@ rolesRouter.post("", validateBody(roleCreate), async (req, res) => {
   const { token, userId } = req as AuthedRequest;
   const client = getUserSupabaseClient(token);
   const payload = { ...req.body, user_id: userId };
+  console.log("payload", payload);
   const { data, error } = await client.from("roles").insert(payload).select().single();
+  console.log("data", data);
+  console.log("error", error);
   if (error) {
     res.status(400).json({ detail: error.message });
     return;

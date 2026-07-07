@@ -33,6 +33,7 @@ async function fetchList<T>(path: string, token: string): Promise<T[]> {
     cache: "no-store",
   });
   if (!response.ok) return [];
+
   return response.json();
 }
 
