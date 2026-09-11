@@ -81,9 +81,43 @@ Build order (not the same as runtime order — build the middle first):
 - [ ] **Phase 5 — Minimal feed.** A plain per-user list of pasted-in
       postings, sorted by date, each with a button that kicks off tailoring.
       No ranking, no preferences, no notifications yet.
+- [ ] **Phase 6 — Automated ingestion (Greenhouse).** Pulled forward from
+      the post-MVP "ingestion" service as a deliberate amendment. Sources
+      postings automatically from the public Greenhouse Job Board API instead
+      of relying only on paste-in. Depends on Phase 0 (auth) and Phase 1
+      (ledger — the ranking has nothing to score against without it), and
+      reuses the exact `postings` shape the paste-in feed already writes.
+      Shape of it (the "Option C" decision):
+      - A curated set of Greenhouse `board_token`s to poll — a shared
+        `ats_boards` catalog plus a per-user `user_tracked_boards` selection
+        (see data model), *not* an attempt to mirror all of Greenhouse. There
+        is no native cross-company Greenhouse search endpoint; breadth comes
+        from how many boards we track.
+      - A daily job (Render Cron) in the **Node/Express backend** — no
+        separate Python service, since a free auth-less JSON API needs no
+        scrape/parse layer. It calls each board's
+        `GET /v1/boards/{board_token}/jobs?content=true` and upserts results
+        into the shared, unscoped `postings` table via the **service-role
+        key** (the "genuinely unscoped operation" that key is reserved for),
+        deduped on the external job id + its `updated_at`.
+      - **Relevance filtering stays in our backend, per user, behind RLS** —
+        no jobs API ranks postings against a user's ledger. MVP ranking is
+        keyword/skill-tag overlap against the user's `skills`/`achievements`,
+        weighted by recency and confidence. Embedding-based ranking stays
+        deferred (below).
 
 Deliberately out of scope for MVP — don't build these yet:
-- Automated crawling of job boards
+- Automated crawling of job boards *in the general sense* — HTML scraping,
+  headless-browser scraping, or anything against a site whose ToS prohibits
+  it (this is what killed the LinkedIn idea). **Deliberate exception, folded
+  into MVP as Phase 6:** pulling postings from public **ATS Job Board APIs**
+  that expose them for free and without auth, starting with Greenhouse's Job
+  Board API. This is an amendment to the original roadmap, made consciously —
+  it's an official, uncapped, ToS-clean JSON API, not a crawler, so it
+  doesn't carry the risk the blanket "no crawling" rule was written to avoid.
+  What remains out: scraping boards with no public API, and paid multi-company
+  aggregator APIs (Fantastic.jobs, JobsPipe, etc.) — revisit those only if the
+  self-owned Greenhouse ingestion proves too narrow.
 - Embedding-based ranking/matching
 - Hiring manager / recruiter contact layer
 - Analytics on outcomes (needs a real sample of applications first, per user
@@ -178,11 +212,27 @@ created_at, etc.) via email/password auth; no separate `public.users` or
 `completed`, `notes`
 
 **postings** — `id`, `company`, `title`, `raw_text`, `source_url`,
-`date_added`. Postings themselves can be shared across users (the same
-job description is the same job description for everyone) — keep this
-table unscoped, but put any user-specific notes or tags on a separate
-`user_id`-scoped join table (e.g. `user_posting_notes`) rather than adding
-per-user columns to `postings` directly.
+`date_added`, plus (added for Phase 6 ingestion) `source` (`paste` /
+`greenhouse` / future ATS sources), `external_id` (the source's own job id,
+e.g. Greenhouse's `id`), and `external_updated_at` (the source's
+`updated_at`, used for dedup/refresh). A `(source, external_id)` uniqueness
+constraint lets the ingestion job upsert idempotently and only rewrite rows
+whose `external_updated_at` changed. Postings themselves can be shared across
+users (the same job description is the same job description for everyone) —
+keep this table unscoped, but put any user-specific notes or tags on a
+separate `user_id`-scoped join table (e.g. `user_posting_notes`) rather than
+adding per-user columns to `postings` directly.
+
+**ats_boards** — `id`, `source` (e.g. `greenhouse`), `board_token`,
+`company_name`, `last_polled_at`. Unscoped catalog of ATS boards the system
+knows how to poll — a company's board token is the same for everyone, so this
+is shared, not per-user (same rationale as `postings`). Written via the
+service-role key by the ingestion layer.
+
+**user_tracked_boards** — join table, `user_id` (FK), `board_id`
+(FK → ats_boards), `created_at`. `user_id`-scoped with RLS: which boards a
+given user wants pulled into their feed. Mirrors the
+`postings`/`user_posting_notes` split — shared catalog, per-user selection.
 
 **resume_versions** / **cover_letter_versions** — `id`, `user_id` (FK),
 `posting_id` (FK), `content`, `cited_achievement_ids` (array),

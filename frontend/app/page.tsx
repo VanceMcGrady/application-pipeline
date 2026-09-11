@@ -20,6 +20,9 @@ export default async function Home() {
       <Link href="/ledger" className="underline">
         Go to your experience ledger
       </Link>
+      <Link href="/feed" className="underline">
+        View job postings
+      </Link>
       <SignOutButton />
       <BackendPing />
     </main>
