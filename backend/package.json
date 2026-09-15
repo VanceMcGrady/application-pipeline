@@ -14,9 +14,11 @@
     "@anthropic-ai/sdk": "^0.126.0",
     "@supabase/supabase-js": "^2.58.0",
     "cors": "^2.8.5",
+    "docx": "^9.7.1",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "puppeteer": "^25.11.0",
     "zod": "^4.1.13"
   },
   "devDependencies": {

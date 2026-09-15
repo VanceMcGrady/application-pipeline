@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import GenerateResumeButton from "./generate-resume-button";
 import PostingForm from "./posting-form";
+import ResumeReview from "./resume-review";
 
 type Posting = {
   id: string;
@@ -11,6 +12,7 @@ type Posting = {
   source_url: string | null;
   date_added: string;
 };
+type Achievement = { id: string; title: string; description: string };
 
 async function fetchList<T>(path: string, token: string): Promise<T[]> {
   const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}${path}`, {
@@ -42,11 +44,19 @@ export default async function FeedPage() {
   } = await supabase.auth.getSession();
   const token = session!.access_token;
 
-  const postings = await fetchList<Posting>("/postings", token);
+  const [postings, achievements] = await Promise.all([
+    fetchList<Posting>("/postings", token),
+    fetchList<Achievement>("/achievements", token),
+  ]);
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
-      <h1 className="text-2xl font-semibold">Job postings</h1>
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-2xl font-semibold">Job postings</h1>
+        <Link href="/profile" className="text-sm text-blue-600 underline">
+          Edit profile
+        </Link>
+      </div>
 
       <PostingForm />
 
@@ -73,7 +83,7 @@ export default async function FeedPage() {
                   View posting
                 </a>
               )}
-              <GenerateResumeButton postingId={posting.id} />
+              <ResumeReview postingId={posting.id} achievements={achievements} />
             </li>
           ))}
         </ul>

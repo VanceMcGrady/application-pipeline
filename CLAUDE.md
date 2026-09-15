@@ -163,9 +163,13 @@ Single database. Rough shape — adjust field types to whatever the chosen
 stack expects, but keep the relationships and `user_id` scoping as-is.
 
 **users** — handled by Supabase's built-in `auth.users` (id, email,
-created_at, etc.) via email/password auth; no separate `public.users` or
-`profiles` table for now. All other tables' `user_id` FKs reference
-`auth.users(id)` directly.
+created_at, etc.) via email/password auth; no separate `public.users`
+table. All other tables' `user_id` FKs reference `auth.users(id)` directly.
+
+**profile** — `user_id` (PK, FK → users), `full_name`, `email`, `phone`,
+`location`, `updated_at`. One row per user, added in Phase 3 once a
+rendered resume needed a name/contact header — the first app-specific field
+`auth.users` doesn't already carry.
 
 **roles** — `id`, `user_id` (FK → users), `company`, `title`, `start_date`,
 `end_date`, `location`, `one_line_summary`
