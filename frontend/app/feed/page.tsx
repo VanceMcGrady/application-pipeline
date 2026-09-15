@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import GenerateResumeButton from "./generate-resume-button";
 import PostingForm from "./posting-form";
 
 type Posting = {
@@ -72,6 +73,7 @@ export default async function FeedPage() {
                   View posting
                 </a>
               )}
+              <GenerateResumeButton postingId={posting.id} />
             </li>
           ))}
         </ul>
