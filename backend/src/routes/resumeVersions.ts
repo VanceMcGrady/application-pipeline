@@ -56,14 +56,14 @@ resumeVersionsRouter.post("", validateBody(resumeVersionCreate), async (req, res
   const [{ data: roles, error: rolesError }, { data: achievements, error: achievementsError }] =
     await Promise.all([
       client.from("roles").select("*"),
-      client.from("achievements").select("*").eq("status", "active"),
+      client.from("achievements").select("*").eq("status", "active").eq("sensitivity", "public"),
     ]);
   if (rolesError || achievementsError) {
     res.status(400).json({ detail: (rolesError ?? achievementsError)!.message });
     return;
   }
   if (!achievements?.length) {
-    res.status(400).json({ detail: "No active ledger achievements to draw from" });
+    res.status(400).json({ detail: "No active, public ledger achievements to draw from" });
     return;
   }
 
