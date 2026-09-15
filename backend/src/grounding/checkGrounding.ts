@@ -69,8 +69,9 @@ export function checkGrounding(
       cited.flatMap((achievement) => achievement?.skills_tags ?? []),
     );
 
+    const citedNumbers = new Set(extractNumbers(citedText));
     for (const number of extractNumbers(bullet.text)) {
-      if (!citedText.includes(number)) {
+      if (!citedNumbers.has(number)) {
         notes.push(
           `Bullet ${index + 1} claims "${number}", not found in its cited ledger entry: "${bullet.text}"`,
         );

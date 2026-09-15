@@ -50,6 +50,20 @@ describe("checkGrounding", () => {
     expect(result.notes[0]).toMatch(/cites no ledger entry/);
   });
 
+  it("flags a fabricated number that is only a substring of a cited number", () => {
+    const result = checkGrounding(
+      [{ achievement_ids: ["a1"], text: "Cut query latency 40% by migrating billing to Postgres." }],
+      [
+        {
+          ...achievement,
+          metrics: [{ value: "140", unit: "%", label: "reduction in query latency" }],
+        },
+      ],
+    );
+    expect(result.status).toBe("flagged");
+    expect(result.notes[0]).toMatch(/40%/);
+  });
+
   it("flags a bullet that cites an unknown achievement id", () => {
     const result = checkGrounding(
       [{ achievement_ids: ["does-not-exist"], text: "Cut query latency 40%." }],
