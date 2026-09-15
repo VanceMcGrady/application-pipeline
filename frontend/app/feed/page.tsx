@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import PostingForm from "./posting-form";
 
 type Posting = {
   id: string;
@@ -8,9 +9,6 @@ type Posting = {
   raw_text: string;
   source_url: string | null;
   date_added: string;
-  source: string;
-  external_id: string;
-  external_updated_at: string;
 };
 
 async function fetchList<T>(path: string, token: string): Promise<T[]> {
@@ -49,24 +47,17 @@ export default async function FeedPage() {
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
       <h1 className="text-2xl font-semibold">Job postings</h1>
 
+      <PostingForm />
+
       {postings.length === 0 ? (
         <p className="text-sm text-zinc-600">
-          No postings yet — add a board to{" "}
-          <code className="rounded bg-zinc-100 px-1">
-            backend/src/boardsConfig.ts
-          </code>{" "}
-          and run the ingestion job to pull some in.
+          No postings yet — paste one in above.
         </p>
       ) : (
         <ul className="flex flex-col gap-3">
           {postings.map((posting) => (
             <li key={posting.id} className="flex flex-col gap-1 rounded border p-3 text-sm">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-medium">{posting.title}</span>
-                <span className="shrink-0 rounded-full border px-2 py-0.5 text-xs text-zinc-600">
-                  {posting.source}
-                </span>
-              </div>
+              <span className="font-medium">{posting.title}</span>
               <p className="text-zinc-600">
                 {posting.company} · {new Date(posting.date_added).toLocaleDateString()}
               </p>
