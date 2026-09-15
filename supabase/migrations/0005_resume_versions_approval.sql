@@ -7,6 +7,7 @@
 -- that one column.
 
 create policy "approve own resume_versions" on resume_versions
-  for update using (user_id = auth.uid()) with check (user_id = auth.uid());
+  for update using (user_id = auth.uid() and approved_at is null)
+  with check (user_id = auth.uid());
 
-grant update on resume_versions to authenticated;
+grant update (approved_at) on resume_versions to authenticated;

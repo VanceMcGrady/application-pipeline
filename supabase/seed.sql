@@ -39,7 +39,7 @@ begin
     );
 
     insert into auth.identities (
-      user_id, provider_id, identity_data, provider,
+      user_id, provider_id, identity_data, provider, 
       last_sign_in_at, created_at, updated_at
     ) values (
       v_user_id,
