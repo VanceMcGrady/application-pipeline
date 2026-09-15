@@ -30,7 +30,7 @@ export default function PostingForm() {
       return;
     }
 
-    event.currentTarget.reset();
+    event.currentTarget?.reset();
     router.refresh();
   }
 

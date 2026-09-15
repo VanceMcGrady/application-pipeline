@@ -6,6 +6,7 @@ import { educationRouter } from "./routes/education.js";
 import { healthRouter } from "./routes/health.js";
 import { meRouter } from "./routes/me.js";
 import { postingsRouter } from "./routes/postings.js";
+import { resumeVersionsRouter } from "./routes/resumeVersions.js";
 import { rolesRouter } from "./routes/roles.js";
 import { skillsRouter } from "./routes/skills.js";
 
@@ -26,3 +27,4 @@ app.use("/achievements", achievementsRouter);
 app.use("/skills", skillsRouter);
 app.use("/education", educationRouter);
 app.use("/postings", postingsRouter);
+app.use("/resume-versions", resumeVersionsRouter);
