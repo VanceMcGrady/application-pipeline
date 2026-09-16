@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import CoverLetterReview from "./cover-letter-review";
 import PostingForm from "./posting-form";
 import ResumeReview from "./resume-review";
 
@@ -84,6 +85,7 @@ export default async function FeedPage() {
                 </a>
               )}
               <ResumeReview postingId={posting.id} achievements={achievements} />
+              <CoverLetterReview postingId={posting.id} achievements={achievements} />
             </li>
           ))}
         </ul>

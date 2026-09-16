@@ -1,44 +1,51 @@
 import { Router } from "express";
 import { getAnthropicClient } from "../anthropicClient.js";
-import { checkGrounding, type ResumeBullet } from "../grounding/checkGrounding.js";
-import { generateResumeDraft, type LedgerAchievement, type LedgerRole } from "../llm/generateResumeDraft.js";
+import type { CoverLetterContent, CoverLetterParagraph } from "../coverLetterContent.js";
+import { checkGrounding } from "../grounding/checkGrounding.js";
+import type { LedgerAchievement } from "../llm/generateResumeDraft.js";
+import { generateCoverLetterDraft } from "../llm/generateCoverLetterDraft.js";
 import { fetchLedgerContext } from "../ledgerContext.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
-import { renderResumeDocx } from "../rendering/renderResumeDocx.js";
-import { renderResumePdf } from "../rendering/renderResumePdf.js";
-import { enrichBullets } from "../resumeContent.js";
-import { resumeVersionCreate, resumeVersionRevise } from "../schemas/resumeVersion.js";
+import { renderCoverLetterDocx } from "../rendering/renderCoverLetterDocx.js";
+import { renderCoverLetterPdf } from "../rendering/renderCoverLetterPdf.js";
+import { coverLetterVersionCreate, coverLetterVersionRevise } from "../schemas/coverLetterVersion.js";
 import { getUserSupabaseClient } from "../supabaseClients.js";
 
-export const resumeVersionsRouter = Router();
+export const coverLetterVersionsRouter = Router();
 
-resumeVersionsRouter.use(requireAuth);
+coverLetterVersionsRouter.use(requireAuth);
 
 function buildVersionRow(
   userId: string,
   postingId: string,
-  bullets: ResumeBullet[],
+  greeting: string,
+  bodyParagraphs: CoverLetterParagraph[],
+  closing: string,
   achievements: LedgerAchievement[],
-  roles: LedgerRole[],
 ) {
-  const grounding = checkGrounding(bullets, achievements);
-  const enrichedBullets = enrichBullets(bullets, achievements, roles);
-  const citedAchievementIds = Array.from(new Set(bullets.flatMap((bullet) => bullet.achievement_ids)));
+  // Only body paragraphs make factual claims about the candidate -- the
+  // greeting/closing are boilerplate, so grounding runs on the paragraphs
+  // alone (see 0006_cover_letter_versions.sql).
+  const grounding = checkGrounding(bodyParagraphs, achievements);
+  const citedAchievementIds = Array.from(
+    new Set(bodyParagraphs.flatMap((paragraph) => paragraph.achievement_ids)),
+  );
+  const content: CoverLetterContent = { greeting, body_paragraphs: bodyParagraphs, closing };
 
   return {
     user_id: userId,
     posting_id: postingId,
-    content: { bullets: enrichedBullets },
+    content,
     cited_achievement_ids: citedAchievementIds,
     verification_status: grounding.status,
     verification_notes: grounding.notes,
   };
 }
 
-resumeVersionsRouter.get("", async (req, res) => {
+coverLetterVersionsRouter.get("", async (req, res) => {
   const client = getUserSupabaseClient((req as AuthedRequest).token);
-  let query = client.from("resume_versions").select("*").order("created_at", { ascending: false });
+  let query = client.from("cover_letter_versions").select("*").order("created_at", { ascending: false });
   if (typeof req.query.posting_id === "string") {
     query = query.eq("posting_id", req.query.posting_id);
   }
@@ -50,20 +57,20 @@ resumeVersionsRouter.get("", async (req, res) => {
   res.json(data);
 });
 
-resumeVersionsRouter.get("/:resumeVersionId", async (req, res) => {
+coverLetterVersionsRouter.get("/:coverLetterVersionId", async (req, res) => {
   const client = getUserSupabaseClient((req as AuthedRequest).token);
   const { data, error } = await client
-    .from("resume_versions")
+    .from("cover_letter_versions")
     .select("*")
-    .eq("id", req.params.resumeVersionId);
+    .eq("id", req.params.coverLetterVersionId);
   if (error || !data?.length) {
-    res.status(404).json({ detail: "Resume version not found" });
+    res.status(404).json({ detail: "Cover letter version not found" });
     return;
   }
   res.json(data[0]);
 });
 
-resumeVersionsRouter.post("", validateBody(resumeVersionCreate), async (req, res) => {
+coverLetterVersionsRouter.post("", validateBody(coverLetterVersionCreate), async (req, res) => {
   const { token, userId } = req as AuthedRequest;
   const client = getUserSupabaseClient(token);
   const postingId = req.body.posting_id as string;
@@ -86,15 +93,24 @@ resumeVersionsRouter.post("", validateBody(resumeVersionCreate), async (req, res
 
   let draft;
   try {
-    draft = await generateResumeDraft(getAnthropicClient(), posting.raw_text, ledger.roles, ledger.achievements);
+    draft = await generateCoverLetterDraft(getAnthropicClient(), posting, ledger.roles, ledger.achievements);
   } catch (error) {
-    res.status(502).json({ detail: `Resume generation failed: ${(error as Error).message}` });
+    res.status(502).json({ detail: `Cover letter generation failed: ${(error as Error).message}` });
     return;
   }
 
   const { data, error } = await client
-    .from("resume_versions")
-    .insert(buildVersionRow(userId, postingId, draft.bullets, ledger.achievements, ledger.roles))
+    .from("cover_letter_versions")
+    .insert(
+      buildVersionRow(
+        userId,
+        postingId,
+        draft.greeting,
+        draft.body_paragraphs,
+        draft.closing,
+        ledger.achievements,
+      ),
+    )
     .select()
     .single();
   if (error) {
@@ -104,20 +120,20 @@ resumeVersionsRouter.post("", validateBody(resumeVersionCreate), async (req, res
   res.status(201).json(data);
 });
 
-resumeVersionsRouter.post(
-  "/:resumeVersionId/revise",
-  validateBody(resumeVersionRevise),
+coverLetterVersionsRouter.post(
+  "/:coverLetterVersionId/revise",
+  validateBody(coverLetterVersionRevise),
   async (req, res) => {
     const { token, userId } = req as AuthedRequest;
     const client = getUserSupabaseClient(token);
 
     const { data: original, error: originalError } = await client
-      .from("resume_versions")
+      .from("cover_letter_versions")
       .select("posting_id")
-      .eq("id", req.params.resumeVersionId)
+      .eq("id", req.params.coverLetterVersionId)
       .single();
     if (originalError || !original) {
-      res.status(404).json({ detail: "Resume version not found" });
+      res.status(404).json({ detail: "Cover letter version not found" });
       return;
     }
 
@@ -127,10 +143,16 @@ resumeVersionsRouter.post(
       return;
     }
 
-    const bullets = req.body.bullets as ResumeBullet[];
+    const { greeting, body_paragraphs: bodyParagraphs, closing } = req.body as {
+      greeting: string;
+      body_paragraphs: CoverLetterParagraph[];
+      closing: string;
+    };
     const { data, error } = await client
-      .from("resume_versions")
-      .insert(buildVersionRow(userId, original.posting_id, bullets, ledger.achievements, ledger.roles))
+      .from("cover_letter_versions")
+      .insert(
+        buildVersionRow(userId, original.posting_id, greeting, bodyParagraphs, closing, ledger.achievements),
+      )
       .select()
       .single();
     if (error) {
@@ -141,16 +163,16 @@ resumeVersionsRouter.post(
   },
 );
 
-resumeVersionsRouter.post("/:resumeVersionId/approve", async (req, res) => {
+coverLetterVersionsRouter.post("/:coverLetterVersionId/approve", async (req, res) => {
   const client = getUserSupabaseClient((req as AuthedRequest).token);
 
   const { data: existing, error: fetchError } = await client
-    .from("resume_versions")
+    .from("cover_letter_versions")
     .select("*")
-    .eq("id", req.params.resumeVersionId)
+    .eq("id", req.params.coverLetterVersionId)
     .single();
   if (fetchError || !existing) {
-    res.status(404).json({ detail: "Resume version not found" });
+    res.status(404).json({ detail: "Cover letter version not found" });
     return;
   }
   if (existing.approved_at) {
@@ -159,9 +181,9 @@ resumeVersionsRouter.post("/:resumeVersionId/approve", async (req, res) => {
   }
 
   const { data, error } = await client
-    .from("resume_versions")
+    .from("cover_letter_versions")
     .update({ approved_at: new Date().toISOString() })
-    .eq("id", req.params.resumeVersionId)
+    .eq("id", req.params.coverLetterVersionId)
     .select()
     .single();
   if (error) {
@@ -171,7 +193,7 @@ resumeVersionsRouter.post("/:resumeVersionId/approve", async (req, res) => {
   res.json(data);
 });
 
-resumeVersionsRouter.get("/:resumeVersionId/render", async (req, res) => {
+coverLetterVersionsRouter.get("/:coverLetterVersionId/render", async (req, res) => {
   const client = getUserSupabaseClient((req as AuthedRequest).token);
   const format = req.query.format;
   if (format !== "pdf" && format !== "docx") {
@@ -180,16 +202,16 @@ resumeVersionsRouter.get("/:resumeVersionId/render", async (req, res) => {
   }
 
   const { data: version, error: versionError } = await client
-    .from("resume_versions")
+    .from("cover_letter_versions")
     .select("*")
-    .eq("id", req.params.resumeVersionId)
+    .eq("id", req.params.coverLetterVersionId)
     .single();
   if (versionError || !version) {
-    res.status(404).json({ detail: "Resume version not found" });
+    res.status(404).json({ detail: "Cover letter version not found" });
     return;
   }
   if (!version.approved_at) {
-    res.status(400).json({ detail: "Only approved resume versions can be rendered" });
+    res.status(400).json({ detail: "Only approved cover letter versions can be rendered" });
     return;
   }
 
@@ -204,18 +226,18 @@ resumeVersionsRouter.get("/:resumeVersionId/render", async (req, res) => {
   }
 
   if (format === "pdf") {
-    const pdf = await renderResumePdf(profile, version.content);
+    const pdf = await renderCoverLetterPdf(profile, version.content);
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", "attachment; filename=resume.pdf");
+    res.setHeader("Content-Disposition", "attachment; filename=cover-letter.pdf");
     res.send(pdf);
     return;
   }
 
-  const docx = await renderResumeDocx(profile, version.content);
+  const docx = await renderCoverLetterDocx(profile, version.content);
   res.setHeader(
     "Content-Type",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   );
-  res.setHeader("Content-Disposition", "attachment; filename=resume.docx");
+  res.setHeader("Content-Disposition", "attachment; filename=cover-letter.docx");
   res.send(docx);
 });
