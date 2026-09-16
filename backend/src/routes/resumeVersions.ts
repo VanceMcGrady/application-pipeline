@@ -1,8 +1,8 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { Router } from "express";
 import { getAnthropicClient } from "../anthropicClient.js";
 import { checkGrounding, type ResumeBullet } from "../grounding/checkGrounding.js";
 import { generateResumeDraft, type LedgerAchievement, type LedgerRole } from "../llm/generateResumeDraft.js";
+import { fetchLedgerContext } from "../ledgerContext.js";
 import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
 import { renderResumeDocx } from "../rendering/renderResumeDocx.js";
@@ -14,44 +14,6 @@ import { getUserSupabaseClient } from "../supabaseClients.js";
 export const resumeVersionsRouter = Router();
 
 resumeVersionsRouter.use(requireAuth);
-
-async function fetchLedgerContext(
-  client: SupabaseClient,
-): Promise<
-  | { ok: true; roles: LedgerRole[]; achievements: LedgerAchievement[] }
-  | { ok: false; status: number; detail: string }
-> {
-  const [{ data: roles, error: rolesError }, { data: achievementRows, error: achievementsError }] =
-    await Promise.all([
-      client.from("roles").select("*"),
-      client
-        .from("achievements")
-        .select("*, achievement_skills(skills(name))")
-        .eq("status", "active")
-        .eq("sensitivity", "public"),
-    ]);
-  if (rolesError || achievementsError) {
-    return { ok: false, status: 400, detail: (rolesError ?? achievementsError)!.message };
-  }
-  // Skills are linked via achievement_skills -> skills, not a column on
-  // achievements -- flatten the joined names into skills_tags for the
-  // generation prompt and the grounding check's technology-term vocabulary.
-  const achievements = (achievementRows ?? []).map((row) => {
-    const { achievement_skills, ...achievement } = row as Record<string, unknown> & {
-      achievement_skills?: { skills: { name: string } | null }[];
-    };
-    return {
-      ...achievement,
-      skills_tags: (achievement_skills ?? [])
-        .map((link) => link.skills?.name)
-        .filter((name): name is string => Boolean(name)),
-    } as LedgerAchievement;
-  });
-  if (!achievements.length) {
-    return { ok: false, status: 400, detail: "No active, public ledger achievements to draw from" };
-  }
-  return { ok: true, roles: roles ?? [], achievements };
-}
 
 function buildVersionRow(
   userId: string,
