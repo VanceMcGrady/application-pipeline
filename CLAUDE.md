@@ -81,16 +81,32 @@ Build order (not the same as runtime order — build the middle first):
 - [ ] **Phase 5 — Minimal feed.** A plain per-user list of pasted-in
       postings, sorted by date, each with a button that kicks off tailoring.
       No ranking, no preferences, no notifications yet.
+- [ ] **Phase 6 — Firecrawl posting sourcing.** Integrate the Firecrawl API
+      to pull job listing data from the web into `postings`, alongside manual
+      paste-in. This is the fresh scoping decision on automated sourcing
+      called for below — it replaces the old Greenhouse-ingestion plan
+      rather than resurrecting it, so scope the details (user-triggered URL
+      import vs. scheduled crawls, which sources, schema additions) when
+      this phase starts. Constraints that hold regardless:
+      - Firecrawl is called only from the backend, with the API key kept
+        server-side — never from the frontend.
+      - Scraped postings land in the same per-user `postings` table, scoped
+        by `user_id` under RLS like a pasted posting. No shared catalog
+        unless that's deliberately decided later.
+      - Job listing pages only. Principle 4 still applies: never point
+        Firecrawl at individual people's profiles (LinkedIn etc.), and don't
+        target sites whose ToS prohibits scraping.
+      - Scraped text is posting input only. It feeds tailoring as the job
+        description, never as ledger content.
 
 Deliberately out of scope for MVP — don't build these yet:
-- Automated crawling or ingestion of job boards, including official ATS Job
-  Board APIs (e.g. Greenhouse's). An earlier draft of this plan pulled
-  Greenhouse ingestion forward as a "Phase 6" amendment; that direction was
-  reversed — postings are pasted in manually by the user for the
-  foreseeable future, and there is no ingestion job, `ats_boards` catalog,
-  or board-tracking selection in the current schema. Revisit automated
-  sourcing only if manual paste-in turns out to be too limiting, and treat
-  it as a fresh scoping decision rather than resurrecting the old plan.
+- Automated crawling or ingestion of job boards beyond the Firecrawl
+  integration in Phase 6, including official ATS Job Board APIs (e.g.
+  Greenhouse's). An earlier draft of this plan pulled Greenhouse ingestion
+  forward as a "Phase 6" amendment; that direction was reversed, and there
+  is no ingestion job, `ats_boards` catalog, or board-tracking selection in
+  the current schema. The current Phase 6 (Firecrawl) is the new decision
+  on automated sourcing. Don't revive the old Greenhouse plan as part of it.
 - Embedding-based ranking/matching
 - Hiring manager / recruiter contact layer
 - Analytics on outcomes (needs a real sample of applications first, per user
